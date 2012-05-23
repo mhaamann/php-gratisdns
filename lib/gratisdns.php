@@ -20,13 +20,16 @@ class GratisDNS {
   public $response = null;
   public $html = null;
 
-  function __construct($username, $password) {
+  function __construct($username, $password, $verify_cert = TRUE) {
     require_once __DIR__.'/simple_html_dom.php';
     $this->username = $username;
     $this->password = $password;
 
     if (!function_exists('curl_init')) {die('No cURL.');}
     $this->curl = curl_init();
+	
+	// Having certificates problems: http://curl.haxx.se/docs/sslcerts.html
+	curl_setopt($this->curl, CURLOPT_SSL_VERIFYPEER, $verify_cert);
     curl_setopt($this->curl, CURLOPT_URL, $this->admin_url);
     curl_setopt($this->curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($this->curl, CURLOPT_POST, true);
@@ -42,10 +45,28 @@ class GratisDNS {
     $htmldom = new simple_html_dom(); 
     $htmldom->load($html);
 
-    $this->domains = array();
-    foreach($htmldom->find('form[name=domainform] input[name=domain]') as $input) {
-      $this->domains[] = utf8_encode($input->value);
-    }
+    $this->domains = array();	
+	
+	if ($section == 'primary') {
+	    foreach($htmldom->find('form[name=domainform] input[name=domain]') as $input) {
+	      $this->domains[] = utf8_encode($input->value);
+	    }
+	} else {
+		foreach($htmldom->find('tr') as $input) {
+			$domain_name = ''; $master_dns = '';
+			foreach($input->find('td form input[name=user_domain]') as $row_input) {
+	             $domain_name = utf8_encode($row_input->value);
+				 break;
+		    }
+			foreach($input->find('td form input[name=primarydnsip]') as $row_input) {
+	             $master_dns = utf8_encode($row_input->value);
+				 break;
+		    } 
+			if (!empty($domain_name) && !empty($master_dns)) {
+			$this->domains[] = array('domain_name'=>$domain_name, 'master_dns'=>$master_dns);
+			}
+	    }
+	}
     return $this->domains;
   }
 
